@@ -4,7 +4,8 @@ const express = require("express");
 const app = express();
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const md5 = require('md5');
+const bcrypt = require("bcrypt");
+const saltRounds = 5;
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
@@ -16,14 +17,10 @@ mongoose.connect("mongodb://localhost:27017/SecretsDB",
         useUnifiedTopology: true
     });
 
-
-
 const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
-
-
 
 const User = new mongoose.model("User", userSchema);
 
@@ -37,7 +34,6 @@ app.get("/login", function (req, res) {
         display: "none"
     });
 })
-
 
 app.get("/register", function (req, res) {
     res.render("register.ejs", {
@@ -53,17 +49,21 @@ app.post("/register", function (req, res) {
             console.log(err);
         else {
             if (user)
-            res.render("register.ejs", {
-                display: "block"
-            });
+                res.render("register.ejs", {
+                    display: "block"
+                });
             else {
-                const newUser = new User
-                    ({
-                        email: req.body.username,
-                        password: md5(req.body.password)
-                    })
-                newUser.save();
-                res.redirect("/login");
+                bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+                    const newUser = new User
+                        ({
+                            email: req.body.username,
+                            password: hash
+                        })
+                    newUser.save();
+                    res.redirect("/login");
+
+                })
+
             }
         }
     })
@@ -72,7 +72,7 @@ app.post("/register", function (req, res) {
 
 app.post("/login", function (req, res) {
     const username = req.body.username;
-    const password = md5(req.body.password);
+    const password = req.body.password;
     User.findOne({ email: username }, function (err, user) {
         if (err)
             console.log(err);
@@ -82,15 +82,15 @@ app.post("/login", function (req, res) {
                     display: "block"
                 });
             else {
-                console.log(user);
-                if (user.password === password) {
-                    res.render("secrets");
-                }
-
-                else
-                    res.render("login.ejs", {
-                        display: "block"
-                    });
+                bcrypt.compare(password, user.password, function (err, result) {
+                    console.log(result);
+                    if (result)
+                        res.render("secrets");
+                    else
+                        res.render("login.ejs", {
+                            display: "block"
+                        });
+                })
             }
         }
     })
